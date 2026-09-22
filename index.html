@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Kart Rush</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="menu" class="screen">
+  <h1 class="logo">KART <span>RUSH</span></h1>
+  <div class="panel">
+    <label class="field">Your name
+      <input id="nameInput" maxlength="12" autocomplete="off" spellcheck="false">
+    </label>
+    <div class="field">Kart color
+      <div id="colorPicker" class="colors"></div>
+    </div>
+    <button id="hostBtn" class="btn big">Host a Lobby</button>
+    <div class="divider"><span>or join a friend</span></div>
+    <div class="join-row">
+      <input id="codeInput" maxlength="5" placeholder="CODE" autocomplete="off" spellcheck="false">
+      <button id="joinBtn" class="btn">Join</button>
+    </div>
+    <div id="menuStatus" class="status"></div>
+    <button id="qualityBtn" class="btn small ghost">Graphics: Low</button>
+  </div>
+  <div class="help">
+    <b>W / &uarr;</b> gas &nbsp; <b>S / &darr;</b> brake &nbsp; <b>A D / &larr; &rarr;</b> steer &nbsp;
+    <b>Space</b> drift (hold for a boost) &nbsp; <b>Shift / E</b> use item
+  </div>
+</div>
+
+<div id="lobby" class="screen hidden">
+  <div class="panel wide">
+    <div class="code-label">Lobby code</div>
+    <div id="lobbyCode" class="code"></div>
+    <div class="hint">Friends click <b>Join</b> and type this code</div>
+    <ul id="playerList" class="players"></ul>
+    <div id="hostControls" class="host-controls">
+      <label class="field">Track <select id="trackSelect"></select></label>
+      <label class="field">Bots <select id="botSelect"></select></label>
+      <button id="startBtn" class="btn big">Start Race</button>
+    </div>
+    <div id="waitMsg" class="hint"></div>
+    <div id="lobbyStatus" class="status"></div>
+    <button id="leaveBtn" class="btn small ghost">Leave Lobby</button>
+  </div>
+</div>
+
+<div id="hud" class="hidden">
+  <div id="hudPos" class="hud-pos"></div>
+  <div class="hud-top">
+    <div id="hudLap"></div>
+    <div id="hudTime"></div>
+  </div>
+  <div id="hudItem" class="hud-item"></div>
+  <canvas id="minimap" width="170" height="170"></canvas>
+  <div id="countdown"></div>
+  <div id="wrongWay">WRONG WAY</div>
+  <div id="toast"></div>
+</div>
+
+<div id="touch" class="hidden">
+  <div class="touch-left">
+    <button data-k="left">&#9664;</button>
+    <button data-k="right">&#9654;</button>
+  </div>
+  <div class="touch-right">
+    <button data-k="item" class="t-item">ITEM</button>
+    <button data-k="drift" class="t-drift">DRIFT</button>
+    <button data-k="brake" class="t-brake">BRAKE</button>
+    <button data-k="gas" class="t-gas">GAS</button>
+  </div>
+</div>
+
+<div id="results" class="screen hidden">
+  <div class="panel wide">
+    <h2>Race Results</h2>
+    <table id="resultsTable"></table>
+    <button id="backLobbyBtn" class="btn big">Back to Lobby</button>
+    <div id="resultsWait" class="hint">Waiting for the host to go back to the lobby...</div>
+    <button id="resultsLeaveBtn" class="btn small ghost">Leave</button>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
