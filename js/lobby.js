@@ -1,4 +1,5 @@
 import { TRACKS } from './tracks/index.js';
+import { CHARACTERS, KART_BODIES } from './assets.js';
 
 export const PALETTE = ['#e53935', '#1e88e5', '#43a047', '#fdd835', '#8e24aa', '#fb8c00', '#00acc1', '#ec407a'];
 const BOT_NAMES = ['Blip', 'Nitro', 'Pip', 'Rex', 'Luna', 'Dash', 'Moxie', 'Turbo'];
@@ -8,7 +9,10 @@ export const LAPS = 3;
 const $ = (id) => document.getElementById(id);
 
 export function showScreen(name) {
-  for (const id of ['menu', 'lobby', 'results']) $(id).classList.toggle('hidden', id !== name);
+  for (const id of ['menu', 'lobby', 'results', 'settings', 'loading']) {
+    const el = $(id);
+    if (el) el.classList.toggle('hidden', id !== name);
+  }
 }
 
 function cleanName(n) {
@@ -50,6 +54,8 @@ export class Lobby {
       picker.appendChild(b);
     }
 
+    this.buildPickers();
+
     const codeInput = $('codeInput');
     codeInput.addEventListener('input', () => {
       codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -61,14 +67,69 @@ export class Lobby {
     $('joinBtn').addEventListener('click', () => this.joinGame());
 
     const qBtn = $('qualityBtn');
-    const qLabel = () => { qBtn.textContent = 'Graphics: ' + (this.settings.quality === 'high' ? 'High' : 'Low'); };
+    const qLabel = () => {
+      const labels = { low: 'Low', medium: 'Medium', high: 'High' };
+      qBtn.textContent = 'Graphics: ' + (labels[this.settings.quality] || 'Low');
+    };
     qLabel();
     qBtn.addEventListener('click', () => {
-      this.settings.quality = this.settings.quality === 'high' ? 'low' : 'high';
+      const order = ['low', 'medium', 'high'];
+      const i = order.indexOf(this.settings.quality);
+      this.settings.quality = order[(i + 1) % order.length];
       this.settings.save();
       qLabel();
       this.onQualityChange();
     });
+    $('settingsBtn')?.addEventListener('click', () => {
+      $('settingsQuality').value = this.settings.quality;
+      showScreen('settings');
+    });
+  }
+
+  buildPickers() {
+    const charBox = $('charPicker');
+    const kartBox = $('kartPicker');
+    if (!charBox || !kartBox) return;
+    for (const c of CHARACTERS) {
+      const b = document.createElement('button');
+      b.className = 'pick' + (c.id === this.settings.charId ? ' selected' : '');
+      b.textContent = c.name;
+      b.style.borderColor = c.color;
+      b.addEventListener('click', () => {
+        this.settings.charId = c.id;
+        this.settings.color = c.color;
+        this.settings.save();
+        for (const s of charBox.children) s.classList.toggle('selected', s === b);
+        const sw = [...$('colorPicker').children].find((el) => el.style.background === '' || true);
+        for (const s of $('colorPicker').children) {
+          s.classList.toggle('selected', s.style.background.toLowerCase() === c.color.toLowerCase()
+            || s.style.background.replace(/\s/g, '') === c.color);
+        }
+        this.updateStats();
+      });
+      charBox.appendChild(b);
+    }
+    for (const k of KART_BODIES) {
+      const b = document.createElement('button');
+      b.className = 'pick' + (k.id === this.settings.bodyId ? ' selected' : '');
+      b.textContent = k.name;
+      b.addEventListener('click', () => {
+        this.settings.bodyId = k.id;
+        this.settings.save();
+        for (const s of kartBox.children) s.classList.toggle('selected', s === b);
+        this.updateStats();
+      });
+      kartBox.appendChild(b);
+    }
+    this.updateStats();
+  }
+
+  updateStats() {
+    const body = KART_BODIES.find((b) => b.id === this.settings.bodyId) || KART_BODIES[1];
+    const set = (id, v) => { const el = $(id); if (el) el.style.width = Math.round(v * 50) + '%'; };
+    set('statSpeed', body.speed);
+    set('statAccel', body.accel);
+    set('statHandle', body.handling);
   }
 
   buildLobby() {
@@ -107,7 +168,13 @@ export class Lobby {
     this.setMenuStatus('Creating lobby...', true);
     try {
       await this.net.host();
-      this.players = [{ id: this.net.myId, name: this.settings.name, color: this.settings.color }];
+    this.players = [{
+      id: this.net.myId,
+      name: this.settings.name,
+      color: this.settings.color,
+      charId: this.settings.charId,
+      bodyId: this.settings.bodyId,
+    }];
       this.racing = false;
       this.setMenuStatus('');
       this.showLobby();
@@ -128,7 +195,13 @@ export class Lobby {
     this.setMenuStatus('Connecting...', true);
     try {
       await this.net.join(code);
-      this.net.send({ t: 'join', name: this.settings.name, color: this.settings.color });
+      this.net.send({
+        t: 'join',
+        name: this.settings.name,
+        color: this.settings.color,
+        charId: this.settings.charId,
+        bodyId: this.settings.bodyId,
+      });
       this.setMenuStatus('Connected! Loading lobby...', true);
     } catch (e) {
       this.setMenuStatus(e.message);
@@ -163,6 +236,8 @@ export class Lobby {
       }
       p.name = cleanName(m.name);
       p.color = PALETTE.includes(m.color) ? m.color : PALETTE[this.players.length % PALETTE.length];
+      p.charId = m.charId || null;
+      p.bodyId = m.bodyId || 'balanced';
       this.broadcast();
       return;
     }
@@ -218,7 +293,12 @@ export class Lobby {
     for (let i = 0; i < this.bots; i++) {
       karts.push({ name: BOT_NAMES[i], color: botColors[i % botColors.length], isBot: true, peer: null });
     }
-    for (const p of this.players) karts.push({ name: p.name, color: p.color, isBot: false, peer: p.id });
+    for (const p of this.players) {
+      karts.push({
+        name: p.name, color: p.color, isBot: false, peer: p.id,
+        charId: p.charId, bodyId: p.bodyId || 'balanced',
+      });
+    }
     const msg = { t: 'start', track: this.track, laps: LAPS, karts };
     this.racing = true;
     this.net.broadcast(msg);

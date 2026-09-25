@@ -46,7 +46,8 @@ function ribbon(N, point, alongU) {
 export class Track {
   constructor(def, quality = 'low') {
     this.def = def;
-    this.quality = quality;
+    this.quality = typeof quality === 'string' ? quality : (quality?.id || 'low');
+    this.preset = typeof quality === 'object' ? quality : null;
     this.halfW = def.width / 2;
 
     const pts = def.points.map((p) =>
@@ -93,6 +94,10 @@ export class Track {
       }
     }
     this.pads = def.boosts.map(([f, lf]) => ({ idx: Math.floor(f * N) % N, lat: lf * this.halfW }));
+    this.ramps = (def.jumps || []).map((j) => ({
+      idx: Math.floor(j.at * N) % N,
+      launch: j.launch || 9,
+    }));
 
     this.group = new THREE.Group();
     this.buildGround();
@@ -101,18 +106,43 @@ export class Track {
     this.buildPillars();
     this.buildStart();
     this.buildPads();
+    this.buildRamps();
     this.buildDecor();
   }
 
-  setupScene(scene) {
+  setupScene(scene, preset) {
     const th = this.def.theme;
+    const p = typeof preset === 'object' ? preset : null;
+    const far = p?.drawDistance || (this.quality === 'high' ? 850 : this.quality === 'medium' ? 600 : 320);
     scene.background = new THREE.Color(th.sky);
-    const far = this.quality === 'high' ? 850 : 320;
-    scene.fog = new THREE.Fog(th.fog, far * 0.35, far);
-    scene.add(new THREE.HemisphereLight(0xffffff, th.hemiGround, 1.5));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+    scene.fog = new THREE.Fog(th.fog, far * (p?.fogNear || 0.35), far);
+    scene.add(new THREE.HemisphereLight(0xffffff, th.hemiGround, 1.35));
+    const sun = new THREE.DirectionalLight(0xffffff, p?.shadows ? 2.1 : 1.8);
     sun.position.set(120, 200, 60);
+    if (p?.shadows) {
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(p.shadowSize || 1024, p.shadowSize || 1024);
+      sun.shadow.camera.near = 10;
+      sun.shadow.camera.far = 500;
+      const s = 180;
+      sun.shadow.camera.left = -s;
+      sun.shadow.camera.right = s;
+      sun.shadow.camera.top = s;
+      sun.shadow.camera.bottom = -s;
+    }
     scene.add(sun);
+    this.sun = sun;
+  }
+
+  rampAt(k) {
+    if (!k || k.idx == null) return null;
+    const N = this.N;
+    for (const r of this.ramps) {
+      let d = Math.abs(k.idx - r.idx);
+      d = Math.min(d, N - d);
+      if (d <= 2) return r;
+    }
+    return null;
   }
 
   heading(i) {
@@ -360,11 +390,24 @@ export class Track {
     }
   }
 
+  buildRamps() {
+    const geo = new THREE.BoxGeometry(this.halfW * 1.2, 0.6, 5);
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffca28 });
+    for (const r of this.ramps) {
+      const i = r.idx;
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(this.px[i], this.py[i] + 0.5, this.pz[i]);
+      m.rotation.y = this.heading(i);
+      m.rotation.x = -0.35;
+      this.group.add(m);
+    }
+  }
+
   buildDecor() {
     const th = this.def.theme;
     const rng = seededRandom(this.def.seed);
-    const high = this.quality === 'high';
-    const count = high ? 240 : 70;
+    const high = (this.preset?.scenery ?? (this.quality === 'high' ? 1 : this.quality === 'medium' ? 0.7 : 0.35)) > 0.55;
+    const count = Math.floor((high ? 240 : 70) * (this.preset?.scenery || 1));
     const b = this.bounds;
     const pad = 130;
     const clear = this.halfW + this.def.margin + 4;
@@ -379,12 +422,15 @@ export class Track {
     }
 
     const parts = [];
-    if (th.deco === 'trees') {
+    if (th.deco === 'trees' || th.deco === 'pines') {
       parts.push([new THREE.CylinderGeometry(0.4, 0.55, 2.4, 6).translate(0, 1.2, 0), 0x7b5236]);
-      parts.push([new THREE.ConeGeometry(2.4, 5.5, 7).translate(0, 4.6, 0), 0x2e7d32]);
+      parts.push([new THREE.ConeGeometry(2.4, 5.5, 7).translate(0, 4.6, 0), th.deco === 'pines' ? 0x1b5e20 : 0x2e7d32]);
     } else if (th.deco === 'palms') {
       parts.push([new THREE.CylinderGeometry(0.3, 0.45, 6, 6).translate(0, 3, 0), 0x8d6e63]);
       parts.push([new THREE.ConeGeometry(3.2, 1.4, 6).translate(0, 6.4, 0), 0x2e7d32]);
+    } else if (th.deco === 'neon') {
+      parts.push([new THREE.BoxGeometry(3, 12, 3).translate(0, 6, 0), 0x2a1848]);
+      parts.push([new THREE.BoxGeometry(3.2, 0.6, 3.2).translate(0, 12.2, 0), 0xff00aa]);
     } else {
       parts.push([new THREE.DodecahedronGeometry(2.2, 0).translate(0, 1.2, 0), 0x3b3b3b]);
     }

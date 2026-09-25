@@ -6,7 +6,10 @@
 <title>Kart Rush</title>
 <link rel="stylesheet" href="css/style.css">
 <script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js" } }
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+} }
 </script>
 </head>
 <body>
@@ -14,10 +17,21 @@
 
 <div id="menu" class="screen">
   <h1 class="logo">KART <span>RUSH</span></h1>
-  <div class="panel">
+  <div class="panel wide">
     <label class="field">Your name
       <input id="nameInput" maxlength="12" autocomplete="off" spellcheck="false">
     </label>
+    <div class="field">Character
+      <div id="charPicker" class="picker-row"></div>
+    </div>
+    <div class="field">Kart
+      <div id="kartPicker" class="picker-row"></div>
+    </div>
+    <div id="statBars" class="stats">
+      <div><span>Speed</span><i id="statSpeed"></i></div>
+      <div><span>Accel</span><i id="statAccel"></i></div>
+      <div><span>Handling</span><i id="statHandle"></i></div>
+    </div>
     <div class="field">Kart color
       <div id="colorPicker" class="colors"></div>
     </div>
@@ -28,11 +42,38 @@
       <button id="joinBtn" class="btn">Join</button>
     </div>
     <div id="menuStatus" class="status"></div>
-    <button id="qualityBtn" class="btn small ghost">Graphics: Low</button>
+    <div class="menu-row">
+      <button id="qualityBtn" class="btn small ghost">Graphics: Low</button>
+      <button id="settingsBtn" class="btn small ghost">Settings</button>
+    </div>
   </div>
   <div class="help">
     <b>W / &uarr;</b> gas &nbsp; <b>S / &darr;</b> brake &nbsp; <b>A D / &larr; &rarr;</b> steer &nbsp;
     <b>Space</b> drift (hold for a boost) &nbsp; <b>Shift / E</b> use item
+  </div>
+</div>
+
+<div id="settings" class="screen hidden">
+  <div class="panel">
+    <h2>Settings</h2>
+    <label class="field">Graphics
+      <select id="settingsQuality">
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+      </select>
+    </label>
+    <label class="field">Volume <input id="volSlider" type="range" min="0" max="100" value="70"></label>
+    <label class="field check"><input id="muteCheck" type="checkbox"> Mute</label>
+    <button id="settingsClose" class="btn">Done</button>
+  </div>
+</div>
+
+<div id="loading" class="screen hidden">
+  <div class="panel">
+    <h2>Loading</h2>
+    <div class="bar"><i id="loadBar"></i></div>
+    <div id="loadText" class="hint">Getting ready...</div>
   </div>
 </div>
 
@@ -82,6 +123,7 @@
 <div id="results" class="screen hidden">
   <div class="panel wide">
     <h2>Race Results</h2>
+    <div id="resultsPodium"></div>
     <table id="resultsTable"></table>
     <button id="backLobbyBtn" class="btn big">Back to Lobby</button>
     <div id="resultsWait" class="hint">Waiting for the host to go back to the lobby...</div>

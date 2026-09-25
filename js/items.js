@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { spinOut } from './kart.js';
 import { canvasTexture } from './track.js';
 import { botWantsItem } from './bots.js';
+import { audio } from './audio.js';
 
 export const ITEM_LIST = ['mushroom', 'banana', 'green', 'red', 'star'];
 export const ITEM_ICONS = { mushroom: '🍄', banana: '🍌', green: '🟢', red: '🔴', star: '⭐' };
@@ -156,6 +157,8 @@ export class Items {
     const race = this.race;
     if (k.gone || k.star > 0 || race.now < k.hitImmune) return;
     k.hitImmune = race.now + 1.6;
+    race.effects?.hit(k.x, k.y, k.z);
+    audio.hit();
     if (k.local) spinOut(k);
     else race.net.broadcast({ t: 'ev', fx: 'spin', k: k.id });
   }

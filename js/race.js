@@ -4,6 +4,10 @@ import { TRACKS } from './tracks/index.js';
 import { createKart, stepKart, buildKartMesh, updateKartMesh, packFlags, unpackFlags, spinOut } from './kart.js';
 import { Items, ITEM_LIST } from './items.js';
 import { botInput, initBot, updateRubberBand } from './bots.js';
+import { getPreset } from './quality.js';
+import { Effects } from './effects.js';
+import { audio } from './audio.js';
+import { KART_BODIES } from './assets.js';
 
 const STEP = 1 / 60;
 const NET_RATE = 1 / 15;
@@ -29,10 +33,12 @@ export class Race {
     this.net = net;
     this.isHost = isHost;
     this.laps = start.laps;
+    this.preset = getPreset(quality);
     this.scene = new THREE.Scene();
-    this.track = new Track(TRACKS[start.track] || TRACKS[0], quality);
-    this.track.setupScene(this.scene);
+    this.track = new Track(TRACKS[start.track] || TRACKS[0], this.preset);
+    this.track.setupScene(this.scene, this.preset);
     this.scene.add(this.track.group);
+    this.effects = new Effects(this.scene, this.preset.particles);
 
     this.now = 0;
     this.time = 0;
@@ -42,7 +48,13 @@ export class Race {
     this.netT = 0;
 
     this.karts = start.karts.map((info, i) => {
-      const k = createKart(i, info);
+      const body = KART_BODIES.find((b) => b.id === info.bodyId) || KART_BODIES[1];
+      const k = createKart(i, {
+        ...info,
+        speedStat: body.speed,
+        accelStat: body.accel,
+        handlingStat: body.handling,
+      });
       const g = this.track.gridSlot(i);
       k.x = k.tx = g.x;
       k.y = k.ty = g.y;
@@ -52,6 +64,9 @@ export class Race {
       k.local = info.peer === myPeer || (isHost && k.isBot);
       if (k.isBot) initBot(k);
       k.mesh = buildKartMesh(k, info.peer !== myPeer);
+      if (this.preset.shadows && k.mesh.root) {
+        k.mesh.root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      }
       this.scene.add(k.mesh.root);
       return k;
     });
@@ -104,7 +119,15 @@ export class Race {
     this.rank();
     if (this.isHost) updateRubberBand(this);
     this.items.update(dt);
-    for (const k of this.karts) updateKartMesh(k, dt, this.track, this.now);
+    for (const k of this.karts) {
+      updateKartMesh(k, dt, this.track, this.now);
+      if (!k.gone) {
+        this.effects.drift(k);
+        this.effects.boostFx(k);
+        if (k === this.me) audio.engine(k.id, k.speed);
+      }
+    }
+    this.effects.update(dt);
     this.trackMyItem();
     this.checkWrongWay(dt);
 
@@ -148,10 +171,11 @@ export class Race {
     if (k.lap > this.laps && !k.finished) {
       k.finished = true;
       k.finishTime = this.time;
-      if (k === this.me) this.toast('FINISH!', 3);
+      if (k === this.me) { this.toast('FINISH!', 3); audio.finish(); }
       if (this.isHost) this.recordFinish(k);
     } else if (k === this.me && k.lap > 1) {
       this.toast(k.lap === this.laps ? 'FINAL LAP!' : `LAP ${k.lap}`, 1.8);
+      audio.lap();
     }
   }
 
@@ -165,8 +189,9 @@ export class Race {
     const it = me.item;
     me.item = null;
     me.itemLockUntil = this.now + 0.8;
-    if (it === 'mushroom') me.boost = Math.max(me.boost, 1.3);
+    if (it === 'mushroom') { me.boost = Math.max(me.boost, 1.3); audio.boost(); }
     if (it === 'star') me.star = 7;
+    audio.item();
     if (this.isHost) this.items.hostUse(me, it);
     else this.net.send({ t: 'use', it });
   }

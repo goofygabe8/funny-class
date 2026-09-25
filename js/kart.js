@@ -31,6 +31,9 @@ export function createKart(id, info) {
     speedMul: 1, skill: 1, place: 1, score: 0, gone: false, local: false,
     tx: 0, ty: 0, tz: 0, th: 0, ts: 0, recv: 0, hasTarget: false,
     spinVis: 0, wheelRot: 0, wasDrifting: false, mesh: null, ai: null,
+    vy: 0, airborne: false, airTime: 0, trickBoost: false,
+    charId: info.charId || null, bodyId: info.bodyId || 'balanced',
+    speedStat: info.speedStat || 1, accelStat: info.accelStat || 1, handlingStat: info.handlingStat || 1,
   };
 }
 
@@ -56,14 +59,14 @@ export function stepKart(k, inp, dt, track, karts) {
   let fs = k.vx * fx + k.vz * fz;
   let ls = k.vx * rx + k.vz * rz;
 
-  let cap = KART.maxSpeed * k.speedMul;
+  let cap = KART.maxSpeed * k.speedMul * (k.speedStat || 1);
   if (k.star > 0) cap *= 1.18;
   if (k.boost > 0) cap *= KART.boostMul;
-  else if (k.offroad && k.star <= 0) cap *= track.def.offroadMul;
+  else if (k.offroad && k.star <= 0 && !k.airborne) cap *= track.def.offroadMul;
 
   if (k.boost > 0 && fs < cap) fs = Math.min(cap, fs + 50 * dt);
   if (thr > 0 && fs < cap) {
-    const a = KART.accel * thr * (fs < 0 ? 2 : 1 - 0.5 * Math.max(0, fs) / cap);
+    const a = KART.accel * (k.accelStat || 1) * thr * (fs < 0 ? 2 : 1 - 0.5 * Math.max(0, fs) / cap);
     fs = Math.min(cap, fs + a * dt);
   }
   if (brk > 0) {
@@ -100,7 +103,7 @@ export function stepKart(k, inp, dt, track, karts) {
   }
 
   const sf = Math.sign(fs) * Math.min(1, Math.abs(fs) / 6);
-  const rate = KART.turn * (k.drifting ? 1.2 : 1) * (1 - 0.3 * Math.min(1, Math.abs(fs) / KART.maxSpeed));
+  const rate = KART.turn * (k.handlingStat || 1) * (k.drifting ? 1.2 : 1) * (1 - 0.3 * Math.min(1, Math.abs(fs) / KART.maxSpeed));
   const lsBefore = Math.abs(ls);
   ls *= Math.exp(-(k.drifting ? KART.driftGrip : KART.grip) * dt);
   // Sideways slide that the tires absorb is fed back into forward speed, so corners and drifts keep momentum.
@@ -113,7 +116,36 @@ export function stepKart(k, inp, dt, track, karts) {
   k.z += k.vz * dt;
   k.speed = fs;
 
+  // Jumps / airborne: apply vertical motion, then let constrain set the road height and decide landing.
+  const ramp = track.rampAt?.(k);
+  if (!k.airborne && ramp && fs > 10) {
+    k.airborne = true;
+    k.airTime = 0;
+    k.trickBoost = false;
+    k.vy = ramp.launch + Math.min(8, fs * 0.12);
+  }
+  let airY = null;
+  if (k.airborne) {
+    k.airTime += dt;
+    if (inp.drift && !k.trickBoost && k.airTime > 0.15) {
+      k.trickBoost = true;
+      k.boost = Math.max(k.boost, 0.55);
+    }
+    k.vy -= 28 * dt;
+    airY = k.y + k.vy * dt;
+  }
+
   track.constrain(k);
+  if (airY != null) {
+    const roadY = k.y;
+    if (airY > roadY + 0.15) {
+      k.y = airY;
+    } else {
+      k.y = roadY;
+      k.airborne = false;
+      k.vy = 0;
+    }
+  }
 
   const R = KART.radius * 2;
   for (const o of karts) {

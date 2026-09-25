@@ -138,8 +138,40 @@ input:focus, select:focus { border-color: #ffd83b; }
 .status { min-height: 18px; font-size: 14px; color: #ff9d8f; text-align: center; }
 .status.ok { color: #8fffb0; }
 
-.help {
-  max-width: 640px;
+.menu-row { display: flex; gap: 8px; }
+.menu-row .btn { flex: 1; }
+.picker-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.pick {
+  border: 2px solid #3a4470;
+  background: #0c1024;
+  color: #fff;
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+.pick.selected { border-color: #ffd83b; background: rgba(255, 216, 59, 0.15); }
+.stats { display: grid; gap: 6px; font-size: 12px; text-transform: uppercase; color: #aab4d4; }
+.stats div { display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 8px; }
+.stats i {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #ff4b3e, #ffd83b);
+  width: 50%;
+}
+.field.check { flex-direction: row; align-items: center; gap: 10px; text-transform: none; }
+.bar { height: 12px; background: #0c1024; border-radius: 8px; overflow: hidden; border: 2px solid #3a4470; }
+.bar i { display: block; height: 100%; width: 0%; background: #ffd83b; transition: width 0.2s; }
+#resultsPodium { display: flex; justify-content: center; gap: 12px; align-items: flex-end; min-height: 90px; margin: 8px 0 14px; }
+#resultsPodium .pod {
+  width: 90px; text-align: center; border-radius: 12px 12px 0 0; padding: 10px 6px; background: rgba(255,255,255,0.08);
+}
+#resultsPodium .pod.p1 { height: 90px; background: rgba(255,216,59,0.25); }
+#resultsPodium .pod.p2 { height: 70px; }
+#resultsPodium .pod.p3 { height: 55px; }
+#resultsPodium .dot { width: 18px; height: 18px; border-radius: 50%; display: inline-block; }
   text-align: center;
   font-size: 13px;
   color: #dfe5ff;
@@ -318,3 +350,38 @@ input:focus, select:focus { border-color: #ffd83b; }
   .touch-right { right: 12px; bottom: 120px; }
   .hud-pos { font-size: 52px; }
 }
+
+.menu-row { display: flex; gap: 8px; }
+.menu-row .btn { flex: 1; }
+.picker-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.pick {
+  border: 2px solid #3a4470;
+  background: #0c1024;
+  color: #fff;
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+.pick.selected { border-color: #ffd83b; background: rgba(255, 216, 59, 0.15); }
+.stats { display: grid; gap: 6px; font-size: 12px; text-transform: uppercase; color: #aab4d4; }
+.stats div { display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 8px; }
+.stats i {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #ff4b3e, #ffd83b);
+  width: 50%;
+}
+.field.check { flex-direction: row; align-items: center; gap: 10px; text-transform: none; }
+.bar { height: 12px; background: #0c1024; border-radius: 8px; overflow: hidden; border: 2px solid #3a4470; }
+.bar i { display: block; height: 100%; width: 0%; background: #ffd83b; transition: width 0.2s; }
+#resultsPodium { display: flex; justify-content: center; gap: 12px; align-items: flex-end; min-height: 90px; margin: 8px 0 14px; }
+#resultsPodium .pod {
+  width: 90px; text-align: center; border-radius: 12px 12px 0 0; padding: 10px 6px; background: rgba(255,255,255,0.08);
+}
+#resultsPodium .pod.p1 { height: 90px; background: rgba(255,216,59,0.25); }
+#resultsPodium .pod.p2 { height: 70px; }
+#resultsPodium .pod.p3 { height: 55px; }
+#resultsPodium .dot { width: 18px; height: 18px; border-radius: 50%; display: inline-block; }
