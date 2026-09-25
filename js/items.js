@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { spinOut } from './kart.js';
 import { canvasTexture } from './track.js';
 import { botWantsItem } from './bots.js';
+import { audio } from './audio.js';
 
 export const ITEM_LIST = ['mushroom', 'banana', 'green', 'red', 'star'];
 export const ITEM_ICONS = { mushroom: '🍄', banana: '🍌', green: '🟢', red: '🔴', star: '⭐' };
@@ -95,7 +96,10 @@ export class Items {
   projSnap() {
     const out = [];
     for (const p of this.projs.values()) {
-      out.push([p.id, PROJ_TYPES.indexOf(p.type), r2(p.x), r2(p.y), r2(p.z), r2(p.vx), r2(p.vz)]);
+      out.push([
+        p.id, PROJ_TYPES.indexOf(p.type), r2(p.x), r2(p.y), r2(p.z), r2(p.vx), r2(p.vz),
+        p.owner ?? -1, p.target ?? -1, r2(Math.max(0, p.life - p.age)),
+      ]);
     }
     return out;
   }
@@ -153,6 +157,8 @@ export class Items {
     const race = this.race;
     if (k.gone || k.star > 0 || race.now < k.hitImmune) return;
     k.hitImmune = race.now + 1.6;
+    race.effects?.hit(k.x, k.y, k.z);
+    audio.hit();
     if (k.local) spinOut(k);
     else race.net.broadcast({ t: 'ev', fx: 'spin', k: k.id });
   }
@@ -281,6 +287,27 @@ export class Items {
     p.idx = i;
   }
 
+  // Converts client-side copies of projectiles and boxes into host-simulated ones after a host change.
+  becomeHost() {
+    const tr = this.race.track;
+    let maxId = 0;
+    for (const p of this.projs.values()) {
+      maxId = Math.max(maxId, p.id);
+      p.idx = tr.locate(p.x, p.y, p.z, null);
+      p.s = p.idx;
+      p.lat = tr.lateral(p.x, p.z, p.idx);
+      p.speed = Math.hypot(p.vx, p.vz) || (p.type === 'red' ? 50 : 58);
+      p.age = 1;
+      p.life = 1 + (p.left ?? 5);
+      p.recv = null;
+    }
+    this.nextId = maxId + 1;
+    for (const b of this.boxes) {
+      b.hideUntil = 0;
+      if (!b.active) b.timer = 3;
+    }
+  }
+
   // ---------- Client side ----------
 
   applySnap(b, parr) {
@@ -291,7 +318,7 @@ export class Items {
       box.active = active;
     });
     const seen = new Set();
-    for (const [id, ti, x, y, z, vx, vz] of parr) {
+    for (const [id, ti, x, y, z, vx, vz, owner, target, left] of parr) {
       seen.add(id);
       let p = this.projs.get(id);
       if (!p) {
@@ -299,6 +326,9 @@ export class Items {
       }
       p.sx = x; p.sy = y; p.sz = z;
       p.vx = vx; p.vz = vz;
+      p.owner = owner ?? -1;
+      p.target = target ?? -1;
+      p.left = left ?? 5;
       p.recv = now;
     }
     for (const id of [...this.projs.keys()]) if (!seen.has(id)) this.remove(id);

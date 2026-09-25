@@ -4,9 +4,13 @@ import { TRACKS } from './tracks/index.js';
 import { createKart, stepKart, buildKartMesh, updateKartMesh, packFlags, unpackFlags, spinOut } from './kart.js';
 import { Items, ITEM_LIST } from './items.js';
 import { botInput, initBot, updateRubberBand } from './bots.js';
+import { getPreset } from './quality.js';
+import { Effects } from './effects.js';
+import { audio } from './audio.js';
+import { KART_BODIES } from './assets.js';
 
 const STEP = 1 / 60;
-const NET_RATE = 1 / 20;
+const NET_RATE = 1 / 15;
 const PEER_TIMEOUT = 10;
 const IDLE = { steer: 0, throttle: 0, brake: 0, drift: false };
 const r2 = (v) => Math.round(v * 100) / 100;
@@ -29,10 +33,12 @@ export class Race {
     this.net = net;
     this.isHost = isHost;
     this.laps = start.laps;
+    this.preset = getPreset(quality);
     this.scene = new THREE.Scene();
-    this.track = new Track(TRACKS[start.track] || TRACKS[0], quality);
-    this.track.setupScene(this.scene);
+    this.track = new Track(TRACKS[start.track] || TRACKS[0], this.preset);
+    this.track.setupScene(this.scene, this.preset);
     this.scene.add(this.track.group);
+    this.effects = new Effects(this.scene, this.preset.particles);
 
     this.now = 0;
     this.time = 0;
@@ -42,7 +48,13 @@ export class Race {
     this.netT = 0;
 
     this.karts = start.karts.map((info, i) => {
-      const k = createKart(i, info);
+      const body = KART_BODIES.find((b) => b.id === info.bodyId) || KART_BODIES[1];
+      const k = createKart(i, {
+        ...info,
+        speedStat: body.speed,
+        accelStat: body.accel,
+        handlingStat: body.handling,
+      });
       const g = this.track.gridSlot(i);
       k.x = k.tx = g.x;
       k.y = k.ty = g.y;
@@ -52,6 +64,9 @@ export class Race {
       k.local = info.peer === myPeer || (isHost && k.isBot);
       if (k.isBot) initBot(k);
       k.mesh = buildKartMesh(k, info.peer !== myPeer);
+      if (this.preset.shadows && k.mesh.root) {
+        k.mesh.root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      }
       this.scene.add(k.mesh.root);
       return k;
     });
@@ -104,7 +119,15 @@ export class Race {
     this.rank();
     if (this.isHost) updateRubberBand(this);
     this.items.update(dt);
-    for (const k of this.karts) updateKartMesh(k, dt, this.track, this.now);
+    for (const k of this.karts) {
+      updateKartMesh(k, dt, this.track, this.now);
+      if (!k.gone) {
+        this.effects.drift(k);
+        this.effects.boostFx(k);
+        if (k === this.me) audio.engine(k.id, k.speed);
+      }
+    }
+    this.effects.update(dt);
     this.trackMyItem();
     this.checkWrongWay(dt);
 
@@ -148,10 +171,11 @@ export class Race {
     if (k.lap > this.laps && !k.finished) {
       k.finished = true;
       k.finishTime = this.time;
-      if (k === this.me) this.toast('FINISH!', 3);
+      if (k === this.me) { this.toast('FINISH!', 3); audio.finish(); }
       if (this.isHost) this.recordFinish(k);
     } else if (k === this.me && k.lap > 1) {
       this.toast(k.lap === this.laps ? 'FINAL LAP!' : `LAP ${k.lap}`, 1.8);
+      audio.lap();
     }
   }
 
@@ -165,8 +189,9 @@ export class Race {
     const it = me.item;
     me.item = null;
     me.itemLockUntil = this.now + 0.8;
-    if (it === 'mushroom') me.boost = Math.max(me.boost, 1.3);
+    if (it === 'mushroom') { me.boost = Math.max(me.boost, 1.3); audio.boost(); }
     if (it === 'star') me.star = 7;
+    audio.item();
     if (this.isHost) this.items.hostUse(me, it);
     else this.net.send({ t: 'use', it });
   }
@@ -257,6 +282,7 @@ export class Race {
         if (this.now >= k.itemLockUntil) k.item = s[8] >= 0 ? ITEM_LIST[s[8]] : null;
         return;
       }
+      k.item = s[8] >= 0 ? ITEM_LIST[s[8]] : null;
       this.setRemote(k, s);
       if (!k.hasTarget) {
         k.hasTarget = true;
@@ -306,8 +332,40 @@ export class Race {
     const k = this.kartByPeer(peer);
     if (k && !k.gone) {
       k.gone = true;
-      this.net.broadcast({ t: 'left', k: k.id });
+      if (this.isHost) this.net.broadcast({ t: 'left', k: k.id });
     }
+  }
+
+  // Called on every client when the server promotes a new host (the old host left).
+  onHostChanged(newHostId) {
+    this.lastSnap = this.now;
+    if (newHostId === this.me.peer && !this.isHost) this.becomeHost();
+  }
+
+  // Takes over the race from the latest snapshot: bots, item boxes, projectiles and finish order.
+  becomeHost() {
+    this.isHost = true;
+    for (const k of this.karts) {
+      k.lastHeard = this.now;
+      if (!k.isBot || k.gone) continue;
+      k.local = true;
+      k.x = k.tx; k.y = k.ty; k.z = k.tz; k.h = k.th;
+      k.vx = Math.sin(k.th) * k.ts;
+      k.vz = Math.cos(k.th) * k.ts;
+      k.speed = k.ts;
+      k.boost = k.boostOn ? 0.5 : 0;
+      k.star = k.starOn ? 3 : 0;
+      k.spin = k.spinOn ? 0.6 : 0;
+      k.drifting = false;
+      if (!k.skill || k.skill === 1) initBot(k);
+      k.itemReadyAt = this.now + 1 + Math.random() * 2;
+    }
+    this.items.becomeHost();
+    if (this.finishOrder.length) {
+      const firstHuman = this.finishOrder.find((e) => this.karts[e.k] && !this.karts[e.k].isBot);
+      if (firstHuman) this.firstHumanFinish = this.now;
+    }
+    this.toast('YOU ARE NOW THE HOST', 2);
   }
 
   // ---------- Finish ----------
