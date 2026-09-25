@@ -112,7 +112,7 @@ export class Lobby {
       this.setMenuStatus('');
       this.showLobby();
     } catch (e) {
-      this.setMenuStatus('Could not create lobby: ' + (e.type || e.message));
+      this.setMenuStatus(e.message || 'Could not create a lobby.');
     } finally {
       this.setBusy(false);
     }
@@ -181,7 +181,21 @@ export class Lobby {
   peerLeft(peerId) {
     const before = this.players.length;
     this.players = this.players.filter((p) => p.id !== peerId);
-    if (this.players.length !== before && !this.racing) this.broadcast();
+    if (this.players.length === before) return;
+    if (this.net.isHost && !this.racing) this.broadcast();
+    else if (!$('lobby').classList.contains('hidden')) this.render();
+  }
+
+  onHostChanged(newHostId, racing) {
+    const i = this.players.findIndex((p) => p.id === newHostId);
+    if (i > 0) this.players.unshift(this.players.splice(i, 1)[0]);
+    this.racing = racing;
+    if (!this.net.isHost) return;
+    if (!racing) this.broadcast();
+    if (!$('lobby').classList.contains('hidden')) {
+      $('lobbyStatus').textContent = 'The host left, so you are now the host.';
+      $('lobbyStatus').classList.add('ok');
+    }
   }
 
   clampBots() {
@@ -225,6 +239,7 @@ export class Lobby {
   }
 
   showLobby() {
+    if ($('lobby').classList.contains('hidden')) $('lobbyStatus').textContent = '';
     showScreen('lobby');
     this.render();
   }

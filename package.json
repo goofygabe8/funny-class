@@ -12,6 +12,7 @@
     "deploy": "npm run deploy:server && npm run deploy:site"
   },
   "devDependencies": {
+    "puppeteer-core": "^23.11.1",
     "wrangler": "^4.0.0"
   }
 }

@@ -6,7 +6,7 @@ import { Items, ITEM_LIST } from './items.js';
 import { botInput, initBot, updateRubberBand } from './bots.js';
 
 const STEP = 1 / 60;
-const NET_RATE = 1 / 20;
+const NET_RATE = 1 / 15;
 const PEER_TIMEOUT = 10;
 const IDLE = { steer: 0, throttle: 0, brake: 0, drift: false };
 const r2 = (v) => Math.round(v * 100) / 100;
@@ -257,6 +257,7 @@ export class Race {
         if (this.now >= k.itemLockUntil) k.item = s[8] >= 0 ? ITEM_LIST[s[8]] : null;
         return;
       }
+      k.item = s[8] >= 0 ? ITEM_LIST[s[8]] : null;
       this.setRemote(k, s);
       if (!k.hasTarget) {
         k.hasTarget = true;
@@ -306,8 +307,40 @@ export class Race {
     const k = this.kartByPeer(peer);
     if (k && !k.gone) {
       k.gone = true;
-      this.net.broadcast({ t: 'left', k: k.id });
+      if (this.isHost) this.net.broadcast({ t: 'left', k: k.id });
     }
+  }
+
+  // Called on every client when the server promotes a new host (the old host left).
+  onHostChanged(newHostId) {
+    this.lastSnap = this.now;
+    if (newHostId === this.me.peer && !this.isHost) this.becomeHost();
+  }
+
+  // Takes over the race from the latest snapshot: bots, item boxes, projectiles and finish order.
+  becomeHost() {
+    this.isHost = true;
+    for (const k of this.karts) {
+      k.lastHeard = this.now;
+      if (!k.isBot || k.gone) continue;
+      k.local = true;
+      k.x = k.tx; k.y = k.ty; k.z = k.tz; k.h = k.th;
+      k.vx = Math.sin(k.th) * k.ts;
+      k.vz = Math.cos(k.th) * k.ts;
+      k.speed = k.ts;
+      k.boost = k.boostOn ? 0.5 : 0;
+      k.star = k.starOn ? 3 : 0;
+      k.spin = k.spinOn ? 0.6 : 0;
+      k.drifting = false;
+      if (!k.skill || k.skill === 1) initBot(k);
+      k.itemReadyAt = this.now + 1 + Math.random() * 2;
+    }
+    this.items.becomeHost();
+    if (this.finishOrder.length) {
+      const firstHuman = this.finishOrder.find((e) => this.karts[e.k] && !this.karts[e.k].isBot);
+      if (firstHuman) this.firstHumanFinish = this.now;
+    }
+    this.toast('YOU ARE NOW THE HOST', 2);
   }
 
   // ---------- Finish ----------

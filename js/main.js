@@ -89,7 +89,7 @@ function beginRace(msg) {
   if (document.activeElement) document.activeElement.blur();
   const r = new Race({ start: msg, myPeer: net.myId, isHost: net.isHost, net, quality: settings.quality });
   r.onResults = (rows) => setTimeout(() => { if (race === r) showResults(rows); }, 2500);
-  r.onHostTimeout = () => leaveGame('Lost connection to the host.');
+  r.onHostTimeout = () => leaveGame('Lost connection to the race.');
   r.onPeerDropped = (peer) => lobby.peerLeft(peer);
   race = r;
   cam.reset();
@@ -173,7 +173,15 @@ net.onPeerLeave = (peer) => {
   lobby.peerLeft(peer);
   if (race) race.peerLeft(peer);
 };
-net.onHostLost = () => leaveGame('The host left the game.');
+net.onHostChanged = (newHostId) => {
+  lobby.onHostChanged(newHostId, !!race);
+  if (race) race.onHostChanged(newHostId);
+  if (!$('results').classList.contains('hidden')) {
+    $('backLobbyBtn').classList.toggle('hidden', !net.isHost);
+    $('resultsWait').classList.toggle('hidden', net.isHost);
+  }
+};
+net.onHostLost = (message) => leaveGame(message || 'Lost connection to the game server.');
 addEventListener('pagehide', () => net.close());
 
 addEventListener('resize', resize);
@@ -205,6 +213,9 @@ requestAnimationFrame(frame);
 // Background tabs get no animation frames, which would freeze the race for everyone if the host switches tabs.
 const bgTimer = new Worker(URL.createObjectURL(
   new Blob(['setInterval(() => postMessage(0), 33);'], { type: 'text/javascript' })));
+if (new URLSearchParams(location.search).has('debug')) {
+  window.__game = { get race() { return race; }, net, lobby };
+}
 bgTimer.onmessage = () => {
   const now = performance.now();
   if (now - last > 120) tick(now, false);
