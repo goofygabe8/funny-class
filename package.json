@@ -1,0 +1,17 @@
+{
+  "name": "gabes-class",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev:server": "wrangler dev --config server/wrangler.toml --port 8787",
+    "dev:site": "npx http-server -c-1 -p 8080",
+    "test:server": "node server/test/room.test.mjs",
+    "deploy:server": "wrangler deploy --config server/wrangler.toml",
+    "deploy:site": "npm run build && wrangler pages deploy dist --project-name gabes-class --branch main",
+    "deploy": "npm run deploy:server && npm run deploy:site"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
